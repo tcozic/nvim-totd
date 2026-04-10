@@ -2,10 +2,7 @@
 
 A data-driven Neovim plugin that surfaces **Vim tips as structured Markdown files**. It seamlessly blends your own custom tips with built-in Neovim documentation (`vimtutor` and `:help tips`), and uses an **Anki-lite spaced repetition** system to ensure you're always learning something new.
 
-
-<video width="100%" autoplay loop muted controls>
-  <source src="https://github.com/user-attachments/assets/e64deff5-3690-4075-ac81-10cca634304c" type="video/webm">
-</video>
+https://github.com/user-attachments/assets/e64deff5-3690-4075-ac81-10cca634304c
 
 ```text
 ╭──────────────────────────────────────────────────────────────────────────╮
