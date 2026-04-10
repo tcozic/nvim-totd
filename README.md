@@ -77,12 +77,14 @@ A data-driven Neovim plugin that surfaces **Vim tips as structured Markdown file
 }
 ```
 
-### Copying the bundled tips into your database
+### Bootstrapping your database
 
-```bash
-# Replace <plugin-path> with wherever lazy cloned the plugin
-cp -r <plugin-path>/tips/* ~/.local/share/nvim/totd/
-```
+Since `totd` is designed as a personal knowledge base, your physical database starts empty (though you will instantly see tips from the built-in `vimtutor` and `:help`). 
+
+To create your very first physical tip, run:
+`:TotdCreate "My First Tip"`
+
+This will instantly scaffold a Markdown file in your `db_path` and open it for editing.
 
 ---
 
