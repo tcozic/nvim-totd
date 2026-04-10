@@ -6,7 +6,10 @@ local config = require("totd.config")
 local parser = require("totd.parser")
 local ui = require("totd.ui")
 local current_tip_path = nil
-math.randomseed(os.time())
+
+local uv = uv or vim.loop
+math.randomseed(uv.hrtime())
+
 local cached_tutor_tips = {}
 local cached_help_tips = nil
 local cached_custom_tips = {}
@@ -269,7 +272,7 @@ local function process_queue()
 	local filepath = get_state_file()
 	local json_str = vim.fn.json_encode(state)
 
-	vim.uv.fs_open(filepath, "w", 438, function(err, fd)
+	uv.fs_open(filepath, "w", 438, function(err, fd)
 		if err or not fd then
 			vim.schedule(function()
 				vim.notify("[totd] Failed to open state file: " .. (err or "unknown"), vim.log.levels.ERROR)
@@ -279,14 +282,14 @@ local function process_queue()
 			return
 		end
 		
-		vim.uv.fs_write(fd, json_str, -1, function(write_err)
+		uv.fs_write(fd, json_str, -1, function(write_err)
 			if write_err then
 				vim.schedule(function()
 					vim.notify("[totd] Failed to write state file: " .. write_err, vim.log.levels.ERROR)
 				end)
 			end
 			
-			vim.uv.fs_close(fd, function()
+			uv.fs_close(fd, function()
 				is_writing = false
 				process_queue()
 			end)
@@ -484,10 +487,10 @@ function M.list(opts)
 	end
 	-- 1. Inject Local Files
 	if active_sources["local"] then
-		local handle = vim.uv.fs_scandir(db_path)
+		local handle = uv.fs_scandir(db_path)
 		if handle then
 			while true do
-				local name, ftype = vim.uv.fs_scandir_next(handle)
+				local name, ftype = uv.fs_scandir_next(handle)
 				if not name then
 					break
 				end
@@ -646,7 +649,6 @@ function M.pick_random(opts)
 	current_tip_path = selected_tip.path
 	return selected_tip
 end
-
 --- Open and display a random tip.
 --- @param opts table|nil { complexity=string, mode=string, tags=table, display=string }
 function M.random(opts)
@@ -1105,10 +1107,10 @@ function M.clear_cache()
 	cached_custom_tips = {}
 
 	-- 2. Clear disk cache files using libuv (ignores glob/dotfile quirks)
-	local handle = vim.uv.fs_scandir(db_path)
+	local handle = uv.fs_scandir(db_path)
 	if handle then
 		while true do
-			local name, ftype = vim.uv.fs_scandir_next(handle)
+			local name, ftype = uv.fs_scandir_next(handle)
 			if not name then
 				break
 			end

@@ -32,6 +32,11 @@ https://github.com/user-attachments/assets/e64deff5-3690-4075-ac81-10cca634304c
 -  **Instant Materialization** — Press `e` on any virtual or web tip to instantly convert it into a physical `.md` file so you can add your own permanent notes.
 -  **Native Fuzzy Finding** — Deep integration with both `Snacks.picker` and `Telescope` for searching your entire database (including virtual tips) with a custom Markdown previewer.
 
+## Requirements
+
+- **Neovim >= 0.8.0** (Core functionality)
+- **Neovim >= 0.9.4** (If using the recommended `Snacks.picker` integration)
+- **Neovim >= 0.9.0** (If using the optional `Telescope` integration)
 ---
 
 ## Installation
@@ -129,6 +134,7 @@ This will instantly scaffold a Markdown file in your `db_path` and open it for e
 By passing `context=auto` to the randomizer, the plugin will check your current buffer's filetype (e.g., `lua`, `javascript`) and heavily boost the weight of tips that contain a matching tag. If no matches are found, it gracefully falls back to a standard random roll.
 
 ### Native Telescope Integration
+> **Author's Note:** *I personally use `Snacks.picker` for my daily workflow, so this Telescope extension is provided as-is and hasn't been heavily battle-tested. Bug reports and PRs from Telescope users are highly welcome!*
 If you prefer `telescope.nvim` over `Snacks.picker`, `totd` provides a native extension complete with a specialized virtual-tip previewer. 
 
 Add this to your configuration:
@@ -183,6 +189,74 @@ print(teaser.title)    -- e.g., "The Dot Formula"
 print(teaser.synopsis) -- e.g., "The . command is the single most powerful feature..."
 ```
 
+### Dashboard Integration example (as in demo)
+
+
+```lua
+{
+  align = "center",
+  padding = 2,
+  text = (function()
+    local ok, totd = pcall(require, "totd")
+    if not ok then return { { "Plugin loading...", hl = "Comment" } } end
+
+    local tip = totd.pick_random()
+    local data = totd.get_teaser_data(tip)
+
+    local width = 50
+    local ui_text = {}
+
+    -- Matches native Snacks.dashboard colors
+    local hl_title = "Title" 
+    local hl_synopsis = "SnacksDashboardDesc" 
+    local hl_bar = "Comment" 
+    local hl_desc = "SnacksDashboardDesc" 
+    local hl_key = "SnacksDashboardKey" 
+
+    local function wrap(text, max_w)
+      local lines, current_line = {}, ""
+      for word in text:gmatch("%S+") do
+        if #current_line + #word + 1 > max_w then
+          table.insert(lines, current_line)
+          current_line = word
+        else
+          current_line = current_line == "" and word or current_line .. " " .. word
+        end
+      end
+      if current_line ~= "" then table.insert(lines, current_line) end
+      return lines
+    end
+
+    -- 1. TITLE
+    local title_str = "  💡 " .. data.title
+    local title_pad = math.max(0, width - vim.fn.strdisplaywidth(title_str))
+    table.insert(ui_text, { title_str .. string.rep(" ", title_pad) .. "\n\n", hl = hl_title })
+
+    -- 2. SYNOPSIS
+    local wrapped_synopsis = wrap(data.synopsis, width - 4)
+    for _, line in ipairs(wrapped_synopsis) do
+      local line_pad = math.max(0, (width - 4) - vim.fn.strdisplaywidth(line))
+      table.insert(ui_text, { "  ┃ ", hl = hl_bar })
+      table.insert(ui_text, { line .. string.rep(" ", line_pad) .. "\n", hl = hl_synopsis })
+    end
+
+    -- 3. ACTION (Aligns exactly with the text block)
+    local action_desc = "open "
+    local action_key = " <leader>tl"
+    local action_prefix = "    " 
+
+    local used_width = vim.fn.strdisplaywidth(action_prefix .. action_desc .. action_key)
+    local pad_len = math.max(0, width - used_width)
+    
+    table.insert(ui_text, { "\n" .. action_prefix, hl = "Normal" })
+    table.insert(ui_text, { action_desc, hl = hl_desc })
+    table.insert(ui_text, { string.rep(" ", pad_len), hl = hl_bar })
+    table.insert(ui_text, { action_key, hl = hl_key })
+
+    return ui_text
+  end)(),
+}
+```
 ---
 
 ## Tip Schema

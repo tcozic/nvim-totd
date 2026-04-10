@@ -75,7 +75,7 @@ function M.float(lines, sandbox, lang, fm, path)
 	-- Ensure sandbox actually has content (not just an empty string)
 	if sandbox and sandbox ~= "" then
 		table.insert(hints, "[<leader>sb] sandbox")
-		table.insert(hints, "[Y] yank") -- NEW: Add yank to the footer string
+    table.insert(hints, "[<leader>y] yank") -- Updated hint
 	end
 	if fm and type(fm.related) == "table" and #fm.related > 0 then
 		table.insert(hints, "[R] related")
@@ -151,10 +151,9 @@ function M.float(lines, sandbox, lang, fm, path)
 				end,
 			})
 		end, { buffer = buf, desc = "Open Practice Sandbox" })
-    vim.keymap.set("n", "Y", function()
+    vim.keymap.set("n", "<leader>y", function()
 			vim.fn.setreg('"', sandbox)
-			vim.fn.setreg('+', sandbox)
-			vim.notify("[totd] Sandbox copied to register", vim.log.levels.INFO)
+			vim.notify("[totd] Sandbox yanked to unnamed register", vim.log.levels.INFO)
 		end, { buffer = buf, desc = "Yank Sandbox" })
 	end
 
