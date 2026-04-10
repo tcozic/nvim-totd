@@ -45,7 +45,7 @@ https://github.com/user-attachments/assets/e64deff5-3690-4075-ac81-10cca634304c
 
 ```lua
 {
-  "you/nvim-totd",
+  "tcozic/nvim-totd",
   lazy = false,  -- or event = "VeryLazy" if show_on_startup = false
   opts = {
     db_path = vim.fn.stdpath("data") .. "/totd",  
