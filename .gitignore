@@ -1,0 +1,15 @@
+# Neovim / Editor
+*.swp
+*~
+.neoconf.json
+.luarc.json
+
+# Totd specific
+.totd_state.json
+.cache_source_*.json
+
+# Ignore personal knowledge base
+tips/
+
+# macOS
+.DS_Store
