@@ -10,6 +10,8 @@ M.defaults = {
     width = 0.7,   
     height = 0.75, 
     sandbox_split_direction = "vertical",
+    -- "close" | "reroll" | "open_next" | "keep_open"
+    scoring_behavior = "reroll",
   },
   template = {
     default_mode = "normal",

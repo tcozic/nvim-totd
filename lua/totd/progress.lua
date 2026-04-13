@@ -1,5 +1,5 @@
 -- lua/totd/progress.lua
---- Handles learning progress, state persistence, and the random weighting algorithm.
+--- Handles learning progress, state persistence, and the SRS gravity pool algorithm.
 local M = {}
 
 local config = require("totd.config")
@@ -72,11 +72,56 @@ function M.save(state)
 	process_queue()
 end
 
---- Increment the view count
+--- Ensures a tip exists in the state without advancing its schedule.
+--- This replaces the old view counter.
 --- @param filename string
 function M.track_view(filename)
 	local state = M.load()
-	state[filename] = (state[filename] or 0) + 1
+	local record = state[filename]
+	
+	-- Initialize or migrate legacy integer view counts
+	if type(record) ~= "table" then
+		state[filename] = { interval = 1, ease = 2.0, next_due = os.time() }
+		M.save(state)
+	end
+end
+
+--- Process a user's validation score (1=Hard, 2=Good)
+--- @param identifier string
+--- @param score_val number 1 or 2
+function M.score(identifier, score_val)
+	local state = M.load()
+	local filename = vim.fn.fnamemodify(identifier, ":t")
+	local record = state[filename]
+
+	-- Fallback if somehow missing
+	if type(record) ~= "table" then
+		record = { interval = 1, ease = 2.0, next_due = os.time() }
+	end
+
+	-- Fallbacks for partially migrated records
+	record.interval = record.interval or 1
+	record.ease = record.ease or 2.0
+	
+	local DAY_IN_SECONDS = 86400
+
+	if score_val == 1 then
+		-- Hard: Reset interval, penalize ease, due tomorrow
+		record.interval = 1
+		record.ease = math.max(1.3, record.ease - 0.2)
+		record.next_due = os.time() + DAY_IN_SECONDS
+		vim.notify(string.format("[totd] Score: Hard. See you tomorrow! (ease: %.1f)", record.ease), vim.log.levels.INFO)
+	elseif score_val == 2 then
+		-- Good: Push to future, increase interval, ease unchanged
+		record.next_due = os.time() + (record.interval * DAY_IN_SECONDS)
+		record.interval = record.interval * record.ease
+		
+		-- Convert the new interval to a human-readable string for the notification
+		local days = math.floor(record.interval)
+		vim.notify(string.format("[totd] Score: Good. See you in %d day(s).", days), vim.log.levels.INFO)
+	end
+
+	state[filename] = record
 	M.save(state)
 end
 
@@ -109,7 +154,7 @@ function M.toggle_suspend(identifier)
 	return is_now_suspended
 end
 
---- Calculates the probability weight for a tip (Pure 1:1 migration).
+--- Calculates the probability weight based on the Gravity Pool algorithm.
 --- @param tip_data table The parsed tip object
 --- @param context_ft string|nil The current buffer's filetype
 --- @param state table The loaded state database
@@ -117,13 +162,31 @@ end
 function M.calculate_weight(tip_data, context_ft, state)
 	local filename = vim.fn.fnamemodify(tip_data.path, ":t")
 	
+	-- 1. Suspended / Mastered Tips
 	if state["suspend:" .. filename] then
 		return 0 
 	end
 
-	local views = state[filename] or 0
-	local weight = 100 / (views + 1)
+	local weight = 1
+	local record = state[filename]
 
+	-- 2. New vs Due vs Future Math
+	if type(record) ~= "table" or not record.next_due then
+		-- Brand New Tip
+		weight = 50
+	else
+		local now = os.time()
+		if now >= record.next_due then
+			-- Due or Overdue: Base 50 + 10 weight per day overdue
+			local days_overdue = math.max(0, os.difftime(now, record.next_due) / 86400)
+			weight = 50 + (days_overdue * 10)
+		else
+			-- Future Tip: Not due yet
+			weight = 1
+		end
+	end
+
+	-- 3. Context Multiplier
 	if context_ft then
 		for _, tag in ipairs(tip_data.tags or {}) do
 			if tag:lower() == context_ft:lower() then

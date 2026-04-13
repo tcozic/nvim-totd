@@ -66,7 +66,8 @@ function M.float(lines, sandbox, lang, fm, path)
 	table.insert(lines, "")
 	table.insert(lines, string.rep("─", 72))
 
-	local hints = { "[q] close", "[e] edit" }
+  local hints = { "[q] close", "[1] hard", "[2] good", "[e] edit" }
+	
 	if fm and fm.is_suspended then
 		table.insert(hints, "[m] unmask")
 	else
@@ -106,13 +107,42 @@ function M.float(lines, sandbox, lang, fm, path)
 	-- 4. Standard Keymaps
 	vim.keymap.set("n", "q", "<cmd>close<CR>", { buffer = buf, desc = "Close Tip" })
 
-	-- ─────────────────────────────────────────────────────────────
-	-- NEW: Edit Tip Keymap
+  -- ─────────────────────────────────────────────────────────────
+	-- NEW: Edit Tip Keymap & Scoring Behaviors
 	-- ─────────────────────────────────────────────────────────────
 	if path then
+		local function handle_behavior()
+			-- Read the config dynamically so it always respects the user's choice
+			local behavior = require("totd.config").options.ui.scoring_behavior or "close"
+			
+			if behavior == "keep_open" then
+				return -- Do nothing, leave the window open
+			elseif behavior == "reroll" then
+				vim.cmd("close")
+				-- 150ms delay ensures the async DB save finishes before weighting the next random tip
+				vim.defer_fn(function() require("totd.api").pick_random() end, 150)
+			elseif behavior == "open_next" then
+				vim.cmd("close")
+				vim.defer_fn(function() require("totd.api").random() end, 150)
+			else -- "close" (fallback)
+				vim.cmd("close")
+			end
+		end
+
+		vim.keymap.set("n", "1", function()
+			require("totd.api").score(path, 1)
+			handle_behavior()
+		end, { buffer = buf, desc = "Score: Hard" })
+
+		vim.keymap.set("n", "2", function()
+			require("totd.api").score(path, 2)
+			handle_behavior()
+		end, { buffer = buf, desc = "Score: Good" })
+
 		vim.keymap.set("n", "m", function()
-			vim.cmd("close") -- close the current float
-			require("totd.api").toggle_suspend(path) -- toggle state and auto-reopen
+			-- Pass `true` as the second argument so the API doesn't force a redraw
+			require("totd.api").toggle_suspend(path, true)
+			handle_behavior()
 		end, { buffer = buf, desc = "Toggle Mask/Suspend" })
 
 		vim.keymap.set("n", "e", function()

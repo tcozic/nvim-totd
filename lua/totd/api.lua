@@ -1034,4 +1034,10 @@ function M.get_current()
 	end
 	return current_tip_data
 end
+--- Process a validation score for the current tip.
+--- @param identifier string Filename or absolute path
+--- @param score_val number 1 (Hard) or 2 (Good)
+function M.score(identifier, score_val)
+	progress.score(identifier, score_val)
+end
 return M

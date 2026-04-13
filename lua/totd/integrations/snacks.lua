@@ -1,4 +1,3 @@
--- lua/totd/integrations/snacks.lua
 local M = {}
 
 --- Returns a fully configured Snacks picker for TotD
@@ -10,6 +9,8 @@ function M.picker()
 	end
 
 	local totd = require("totd")
+	local progress = require("totd.progress") -- Load the progress module
+	local state = progress.load()             -- Load the current Anki state
 
 	snacks.picker({
 		title = "Tip of the Day",
@@ -18,39 +19,60 @@ function M.picker()
 			local items = {}
 			for _, tip in ipairs(totd.list()) do
 				local is_virtual = tip.path:match("^virtual:")
+				
+				-- Define the filename so we can check the state
+				local filename = vim.fn.fnamemodify(tip.path, ":t")
+				local is_masked = state["suspend:" .. filename] == true
+				
 				table.insert(items, {
 					text = tip.title .. " " .. tip.mode .. " " .. tip.complexity,
 					file = not is_virtual and tip.path or nil,
 					tip_data = tip,
+					is_masked = is_masked, -- Save the flag to the item
 				})
 			end
 			return items
 		end)(),
 		format = function(item, _)
 			local t = item.tip_data
-			local hl = t.complexity == "beginner" and "DiagnosticInfo"
-				or t.complexity == "intermediate" and "DiagnosticWarn"
-				or "DiagnosticError"
+			-- If masked, use "Comment" (grey) for everything
+			local main_hl = item.is_masked and "Comment" or "Normal"
+			local detail_hl = item.is_masked and "Comment"
+				or (
+					t.complexity == "beginner" and "DiagnosticInfo"
+					or t.complexity == "intermediate" and "DiagnosticWarn"
+					or "DiagnosticError"
+				)
 			return {
-				{ t.title, "Normal" },
+				{ t.title, main_hl },
 				{ " [" .. t.mode .. "] ", "Comment" },
-				{ t.complexity, hl },
+				{ t.complexity, detail_hl },
 			}
 		end,
     actions = {
 			mask_tip = function(picker, item)
-				if not item then return end
-				-- Pass `true` to mask it silently without opening the float
+				if not item then
+					return
+				end
+				-- 1. Toggle the backend state silently
 				require("totd").toggle_suspend(item.tip_data.path, true)
+				
+				-- 2. Flip the state of the item currently in memory
+				item.is_masked = not item.is_masked
+				
+				-- 3. Force the picker's list to redraw instantly to apply the new color
+				if picker.list and picker.list.update then
+					picker.list:update({ force = true })
+				end
 			end,
 		},
-    win = {
+		win = {
 			-- Map directly to the input window, where your cursor actually lives!
 			input = {
 				keys = {
 					-- Alt+m toggles the mask instantly in both Insert and Normal modes
 					["<a-m>"] = { "mask_tip", mode = { "i", "n" }, desc = "Toggle Mask" },
-					
+
 					-- If you strictly want a Normal mode only key, use Shift+M
 					["M"] = { "mask_tip", mode = { "n" }, desc = "Toggle Mask" },
 				},
@@ -102,7 +124,9 @@ function M.dashboard_section(opts)
 					current_line = current_line == "" and word or current_line .. " " .. word
 				end
 			end
-			if current_line ~= "" then table.insert(lines, current_line) end
+			if current_line ~= "" then
+				table.insert(lines, current_line)
+			end
 			return lines
 		end
 

@@ -17,7 +17,7 @@ https://github.com/user-attachments/assets/e64deff5-3690-4075-ac81-10cca634304c
 │ > **Synopsis:** The `.` command is the single most powerful feature in    │
 │ > Vim — it lets you repeat any change with one keystroke.                 │
 │                                                                           │
-│  [q] close   [e] edit   [m] mask   [<leader>sb] sandbox   [Y] yank        │
+[1] hard   [2] good   [e] edit   [m] mask   [<leader>sb] sandbox   [q] close │
 ╰──────────────────────────────────────────────────────────────────────────╯
 ```
 
@@ -26,11 +26,11 @@ https://github.com/user-attachments/assets/e64deff5-3690-4075-ac81-10cca634304c
 -  **Static Markdown Database** — Your custom tips live as files you own, version-control, and edit freely.
 -  **Dynamic Virtual Tips** — Automatically parses `vimtutor` lessons and `:help tips` directly from Neovim's runtime without cluttering your hard drive.
 -  **Custom External Sources** — Fetch tips from web APIs, GitHub, or company wikis on the fly using a simple Lua interface with persistent JSON disk caching.
--  **Anki-Lite Learning** — Tracks view counts. `:TotdRandom` automatically prioritizes unread or less-seen tips. Press `m` to **mask** a tip you've mastered so it stops appearing in random rolls.
+-  **Active Spaced Repetition (Anki-Lite)** — Powered by an SM-2 "Gravity Pool" algorithm. Score tips as **Hard** or **Good** to schedule when they appear next. Overdue tips naturally rise to the top of random rolls.
 -  **Context-Aware Rolls** — Automatically weights tips that match your current buffer's filetype.
 -  **Interactive Sandbox** — Press `<leader>sb` to instantly open a tip's code block in a split window for safe practice, or press `Y` to yank it directly to your clipboard.
 -  **Instant Materialization** — Press `e` on any virtual or web tip to instantly convert it into a physical `.md` file so you can add your own permanent notes.
--  **Native Fuzzy Finding** — Deep integration with both `Snacks.picker` and `Telescope` for searching your entire database (including virtual tips) with a custom Markdown previewer.
+-  **Native Fuzzy Finding** — Deep integration with both `Snacks.picker` and `Telescope` for searching your entire database. Masked/suspended tips are intelligently greyed out in the results.
 -  **Seamless Integrations** — Integrations for `snacks.nvim` (Dashboard & Picker) and `lualine.nvim`.
 
 ## Requirements
@@ -56,11 +56,15 @@ https://github.com/user-attachments/assets/e64deff5-3690-4075-ac81-10cca634304c
     enabled_sources = { "local", "tutor", "help" },
     
     ui = {
-      default_display = "float",  -- "float" | "split" | "scratch"
+      default_display = "float",  
       border = "rounded",
       width  = 0.7,   
       height = 0.75,
       sandbox_split_direction = "vertical",
+      
+      -- What happens when you score (1/2) or mask (m) a tip?
+      -- "close" | "reroll" | "open_next" | "keep_open"
+      scoring_behavior = "reroll", 
     },
     template = {
       default_mode       = "normal",
@@ -117,13 +121,14 @@ This will instantly scaffold a Markdown file in your `db_path` and open it for e
 
 | Keymap | Action |
 |--------|--------|
-| `q` / `<Esc>` | Close the tip|
-| `e` | Edit the tip (Materializes virtual tips into local `.md` files)|
-| `m` | Toggle Mask/Suspend (removes the tip from random rolls)|
-| `<leader>sb` | Open the Practice Sandbox split|
+| `1` | Score: **Hard** (Resets interval, you'll see it again tomorrow) |
+| `2` | Score: **Good** (Increases interval, pushes it further into the future) |
+| `m` | Toggle Mask/Suspend (Removes the tip from random rolls entirely) |
+| `e` | Edit the tip (Materializes virtual tips into local `.md` files) |
+| `q` / `<Esc>` | Close the tip |
+| `<leader>sb` | Open the Practice Sandbox split |
 | `Y` | Yank the sandbox code block to the unnamed and system clipboards (`"` and `+`) |
-| `R` | Open Related tips menu (if defined in frontmatter)|
-
+| `R` | Open Related tips menu (if defined in frontmatter) |
 ### Commands
 
 | Command | Description |
@@ -268,6 +273,13 @@ Any standard fenced code block at the bottom of the file will be extracted when 
 # Delete me!
 \`\`\`
 ``` 
+## 📝 Changelog
+
+**Latest Major Updates:**
+- **Active Spaced Repetition (SM-2):** Replaced passive view-count tracking with a fully functional Anki-lite "Gravity Pool" engine. Tips are now explicitly scored as "Hard" or "Good" to calculate their next due date.
+- **Dynamic UI Workflows:** Added `opts.ui.scoring_behavior` to allow users to "binge" tips (`"open_next"`), silently refresh UI (`"reroll"`), or quickly dismiss (`"close"`) after scoring.
+- **Masked Tip UI Polish:** The `Snacks.picker` integration now instantly greys out masked/suspended tips so you can see your active rotation at a glance.
+- **Architectural Rewrite:** Decoupled the `api.lua` from the data layer (`progress.lua`) to eliminate race conditions and async file-saving bugs.
 ## Author's Note
 I originally conceived this plugin as a personal project to force myself to learn Neovim mechanics. I don't intend on becoming an experienced Lua dev, so the codebase was mostly generated using Gemini as an implementation assistant. 
 

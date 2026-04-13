@@ -247,6 +247,7 @@ M.reset_progress = api.reset_progress
 M.get_teaser_data = api.get_teaser_data
 M.get_formatted_body = api.get_formatted_body
 M.toggle_suspend = api.toggle_suspend
+M.score = api.score
 M.clear_cache = api.clear_cache
 M.get_current = api.get_current
 M.snacks_picker = function()
