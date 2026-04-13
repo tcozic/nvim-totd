@@ -37,6 +37,25 @@ function M.picker()
 				{ t.complexity, hl },
 			}
 		end,
+    actions = {
+			mask_tip = function(picker, item)
+				if not item then return end
+				-- Pass `true` to mask it silently without opening the float
+				require("totd").toggle_suspend(item.tip_data.path, true)
+			end,
+		},
+    win = {
+			-- Map directly to the input window, where your cursor actually lives!
+			input = {
+				keys = {
+					-- Alt+m toggles the mask instantly in both Insert and Normal modes
+					["<a-m>"] = { "mask_tip", mode = { "i", "n" }, desc = "Toggle Mask" },
+					
+					-- If you strictly want a Normal mode only key, use Shift+M
+					["M"] = { "mask_tip", mode = { "n" }, desc = "Toggle Mask" },
+				},
+			},
+		},
 		preview = function(ctx)
 			local tip = ctx.item.tip_data
 			if tip.path:match("^virtual:") then

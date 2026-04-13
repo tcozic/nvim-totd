@@ -5,6 +5,7 @@ local M = {}
 local config = require("totd.config")
 local parser = require("totd.parser")
 local ui = require("totd.ui")
+local progress = require("totd.progress")
 local current_tip_path = nil
 local current_tip_data = nil -- NEW: Cache the full tip object
 local uv = uv or vim.loop
@@ -236,119 +237,19 @@ local function get_virtual_tutor_tip(title)
 	end
 	return nil
 end
--- ─────────────────────────────────────────────────────────────────────────────
--- State Management (Anki-lite)
--- ─────────────────────────────────────────────────────────────────────────────
+function M.toggle_suspend(identifier, no_open)
+	local is_suspended = progress.toggle_suspend(identifier)
 
---- Get the path to the hidden state file
---- @return string path
-local function get_state_file()
-	return config.options.db_path .. "/.totd_state.json"
-end
-
---- Load the view counts from disk
---- @return table<string, number>
-local function load_state()
-	local f = io.open(get_state_file(), "r")
-	if not f then
-		return {}
-	end
-	local content = f:read("*a")
-	f:close()
-	local ok, parsed = pcall(vim.fn.json_decode, content)
-	return ok and parsed or {}
-end
-
-
--- Queue to prevent concurrent write race conditions
-local write_queue = {}
-local is_writing = false
-
-local function process_queue()
-	if is_writing or #write_queue == 0 then return end
-	is_writing = true
-	
-	-- We now pop a pre-encoded string, no Vimscript functions needed here!
-	local json_str = table.remove(write_queue, 1)
-	local filepath = get_state_file()
-
-	vim.uv.fs_open(filepath, "w", 438, function(err, fd)
-		if err or not fd then
-			vim.schedule(function()
-				vim.notify("[totd] Failed to open state file: " .. (err or "unknown"), vim.log.levels.ERROR)
-				is_writing = false
-				process_queue()
-			end)
-			return
-		end
-		
-		vim.uv.fs_write(fd, json_str, -1, function(write_err)
-			if write_err then
-				vim.schedule(function()
-					vim.notify("[totd] Failed to write state file: " .. write_err, vim.log.levels.ERROR)
-				end)
-			end
-			
-			vim.uv.fs_close(fd, function()
-				-- Jump back to the main thread before running the next item
-				vim.schedule(function()
-					is_writing = false
-					process_queue()
-				end)
-			end)
-		end)
-	end)
-end
-
---- Save the view counts to disk asynchronously
---- @param state table<string, number|boolean>
-local function save_state(state)
-	-- 1. Encode JSON synchronously on the main thread (100% safe)
-	-- 2. This natively creates a snapshot, so we no longer need vim.deepcopy
-	local ok, json_str = pcall(vim.fn.json_encode, state)
-	if not ok then
-		vim.notify("[totd] Failed to encode state JSON", vim.log.levels.ERROR)
-		return
-	end
-	
-	table.insert(write_queue, json_str)
-	process_queue()
-end
---- Increment the view count for a specific tip
---- @param filename string
-local function track_view(filename)
-	local state = load_state()
-	state[filename] = (state[filename] or 0) + 1
-	save_state(state)
-end
---- Check if a tip is currently suspended/masked
---- @param identifier string
---- @return boolean
-local function is_suspended(identifier)
-	local state = load_state()
-	local filename = vim.fn.fnamemodify(identifier, ":t")
-	return state["suspend:" .. filename] == true
-end
-
---- Toggle the suspend/mask state of a tip and reload it
---- @param identifier string
-function M.toggle_suspend(identifier)
-	local state = load_state()
-	local filename = vim.fn.fnamemodify(identifier, ":t")
-	local sus_key = "suspend:" .. filename
-
-	if state[sus_key] then
-		state[sus_key] = nil
-		vim.notify("[totd] Tip UNMASKED. It will now appear in random rolls.", vim.log.levels.INFO)
-	else
-		state[sus_key] = true
+	if is_suspended then
 		vim.notify("[totd] Tip MASKED. It is suspended from random rolls.", vim.log.levels.INFO)
+	else
+		vim.notify("[totd] Tip UNMASKED. It will now appear in random rolls.", vim.log.levels.INFO)
 	end
 
-	save_state(state)
-	M.open(identifier) -- Instantly reload the UI to show the state change
+	if not no_open then
+		M.open(identifier, nil, true) 
+	end
 end
-
 -- ─────────────────────────────────────────────────────────────────────────────
 -- Internal helpers
 -- ─────────────────────────────────────────────────────────────────────────────
@@ -598,53 +499,33 @@ end
 --- Headless function: Picks a weighted random tip, caches it, and returns the data.
 --- @param opts table|nil
 --- @return table|nil tip_data
---- Headless function: Picks a weighted random tip, caches it, and returns the data.
 function M.pick_random(opts)
 	opts = opts or {}
 	local tips = M.list(opts)
 
-	if #tips == 0 then
-		return nil
-	end
+	if #tips == 0 then return nil end
 
-	local state = load_state()
+	local state = progress.load()
 	local total_weight = 0
 	local weighted_tips = {}
 
-	-- Capture the current filetype if context=auto is requested
 	local context_ft = nil
 	if opts.context == "auto" then
 		context_ft = vim.bo.filetype
 	end
 
 	for _, tip in ipairs(tips) do
-		local filename = vim.fn.fnamemodify(tip.path, ":t")
-
-		if not state["suspend:" .. filename] then
-			local views = state[filename] or 0
-			local weight = 100 / (views + 1)
-
-			-- Heavily bias the weight if a tag matches the current filetype
-			if context_ft then
-				for _, tag in ipairs(tip.tags or {}) do
-					if tag:lower() == context_ft:lower() then
-						weight = weight * 50
-						break
-					end
-				end
-			end
-
+		local weight = progress.calculate_weight(tip, context_ft, state)
+		
+		if weight > 0 then
 			total_weight = total_weight + weight
 			table.insert(weighted_tips, { tip = tip, weight = weight })
 		end
 	end
 
-	if #weighted_tips == 0 then
-		return nil
-	end
+	if #weighted_tips == 0 then return nil end
 
 	local target = math.random(1, math.max(1, math.floor(total_weight)))
-	-- Safe fallback ignoring suspended tips
 	local selected_tip = weighted_tips[1].tip
 	for _, item in ipairs(weighted_tips) do
 		target = target - item.weight
@@ -654,10 +535,9 @@ function M.pick_random(opts)
 		end
 	end
 
-	-- Cache state for the dashboard and the "Last" command
 	current_tip_path = selected_tip.path
-  current_tip_data = selected_tip -- NEW: Save the full object
-  vim.api.nvim_exec_autocmds("User", { pattern = "TotdUpdate", modeline = false })
+	current_tip_data = selected_tip 
+	vim.api.nvim_exec_autocmds("User", { pattern = "TotdUpdate", modeline = false })
 	return selected_tip
 end
 --- Open and display a random tip.
@@ -686,7 +566,7 @@ end
 --- @param body string
 --- @return string|nil sandbox, string|nil lang
 local function extract_virtual_sandbox(body)
-	local lang, code = body:match("```(%w*)\n(.-)\n```%s*$")
+  local lang, code = body:match("```(%w*)\n([^\0]-)\n```%s*$")
 	if code then
 		return vim.trim(code), lang ~= "" and lang or nil
 	end
@@ -697,8 +577,8 @@ end
 ---
 --- @param identifier string Filename (e.g. "the-dot-formula.md") or absolute path
 --- @param display string|nil "float" | "split" | "scratch"
---- Open a specific tip by filename or absolute path.
-function M.open(identifier, display)
+--- @param no_track boolean|nil If true, skip incrementing the view count
+function M.open(identifier, display, no_track)
 	if identifier:match("^virtual:help:") then
 		local tag = identifier:sub(14)
 		local t = get_virtual_help_tip(tag)
@@ -706,9 +586,9 @@ function M.open(identifier, display)
 			return
 		end
 
-		track_view(identifier)
+		if not no_track then progress.track_view(identifier) end
 		current_tip_path = identifier
-		t.fm.is_suspended = is_suspended(identifier)
+		t.fm.is_suspended = progress.is_suspended(identifier)
 
 		local lines = ui.format_tip(t.fm, t.body)
 		-- Help tips use the extractor to grab just the code block
@@ -724,9 +604,9 @@ function M.open(identifier, display)
 			return
 		end
 
-		track_view(identifier)
+		if not no_track then progress.track_view(identifier) end
 		current_tip_path = identifier
-		t.fm.is_suspended = is_suspended(identifier)
+		t.fm.is_suspended = progress.is_suspended(identifier)
 
 		local lines = ui.format_tip(t.fm, t.body)
 		-- Tutor tips bypass the extractor and feed the whole body
@@ -740,9 +620,9 @@ function M.open(identifier, display)
 			return
 		end
 
-		track_view(identifier)
+		if not no_track then progress.track_view(identifier) end
 		current_tip_path = identifier
-		t.fm.is_suspended = is_suspended(identifier)
+		t.fm.is_suspended = progress.is_suspended(identifier)
 
 		local lines = ui.format_tip(t.fm, t.body)
 
@@ -759,7 +639,8 @@ function M.open(identifier, display)
 		return
 	end
 	local path = identifier:sub(1, 1) == "/" and identifier or (config.options.db_path .. "/" .. identifier)
-	track_view(vim.fn.fnamemodify(path, ":t"))
+	
+	if not no_track then progress.track_view(vim.fn.fnamemodify(path, ":t")) end
 
 	local content, err = parser.read_file(path)
 	if not content then
@@ -774,12 +655,11 @@ function M.open(identifier, display)
 		sandbox = nil
 		lang = nil
 	end
-	fm.is_suspended = is_suspended(identifier)
+	fm.is_suspended = progress.is_suspended(identifier)
 	local lines = ui.format_tip(fm, body)
 	-- Add identifier here!
 	ui.render(lines, sandbox, lang, fm, display, identifier)
 end
-
 --- Scaffold a new tip file and drop the user into an editing session.
 ---
 --- @param opts table|nil { title=string }
@@ -990,7 +870,7 @@ end
 function M.reset_progress()
 	local choice = vim.fn.confirm("Reset all learning progress?", "&Yes\n&No", 2)
 	if choice == 1 then
-		save_state({})
+    progress.reset()
 		vim.notify("[totd] View counts reset to zero. All tips have weight 100.", vim.log.levels.INFO)
 	else
 		vim.notify("[totd] Reset cancelled.", vim.log.levels.INFO)
