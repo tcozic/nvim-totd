@@ -25,9 +25,27 @@ end
 --- @param opts table|nil User configuration (merged with defaults)
 function M.setup(opts)
 	config.setup(opts or {})
-
-	-- ── User Commands ──────────────────────────────────────────────────────────
-
+  -- Automatically listen for internal updates to refresh the Snacks dashboard
+  -- Automatically listen for internal updates to refresh UI components
+	vim.api.nvim_create_autocmd("User", {
+		pattern = "TotdUpdate",
+		callback = function()
+			vim.schedule(function()
+				-- 1. Refresh Snacks Dashboard (if active)
+				if package.loaded["snacks"] and require("snacks").dashboard then
+					local buf = vim.api.nvim_get_current_buf()
+					if vim.bo[buf].filetype == "snacks_dashboard" then
+						require("snacks").dashboard.update()
+					end
+				end
+				
+				-- 2. NEW: Refresh Lualine (if active)
+				if package.loaded["lualine"] then
+					require("lualine").refresh()
+				end
+			end)
+		end,
+	})
 	-- :TotdRandom [complexity=<c>] [mode=<m>] [tags=<t>]
 	vim.api.nvim_create_user_command("TotdRandom", function(cmd_opts)
 		local args = {}
@@ -230,4 +248,15 @@ M.get_teaser_data = api.get_teaser_data
 M.get_formatted_body = api.get_formatted_body
 M.toggle_suspend = api.toggle_suspend
 M.clear_cache = api.clear_cache
+M.get_current = api.get_current
+M.snacks_picker = function()
+	require("totd.integrations.snacks").picker()
+end
+
+M.snacks_dashboard = function(opts)
+	return require("totd.integrations.snacks").dashboard_section(opts)
+end
+M.lualine_component = function(opts)
+	return require("totd.integrations.lualine").component(opts)
+end
 return M

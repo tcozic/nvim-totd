@@ -6,7 +6,7 @@ local config = require("totd.config")
 local parser = require("totd.parser")
 local ui = require("totd.ui")
 local current_tip_path = nil
-
+local current_tip_data = nil -- NEW: Cache the full tip object
 local uv = uv or vim.loop
 math.randomseed(uv.hrtime())
 
@@ -656,6 +656,8 @@ function M.pick_random(opts)
 
 	-- Cache state for the dashboard and the "Last" command
 	current_tip_path = selected_tip.path
+  current_tip_data = selected_tip -- NEW: Save the full object
+  vim.api.nvim_exec_autocmds("User", { pattern = "TotdUpdate", modeline = false })
 	return selected_tip
 end
 --- Open and display a random tip.
@@ -1143,5 +1145,13 @@ function M.clear_cache()
 		vim.notify("[totd] Cache is already empty.", vim.log.levels.INFO)
 	end
 end
-
+--- Retrieves the currently active tip without rolling a new one.
+--- If no tip has been rolled yet this session, it rolls one.
+--- @return table|nil tip_data
+function M.get_current()
+	if not current_tip_data then
+		return M.pick_random()
+	end
+	return current_tip_data
+end
 return M
