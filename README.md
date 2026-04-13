@@ -31,6 +31,7 @@ https://github.com/user-attachments/assets/e64deff5-3690-4075-ac81-10cca634304c
 -  **Interactive Sandbox** — Press `<leader>sb` to instantly open a tip's code block in a split window for safe practice, or press `Y` to yank it directly to your clipboard.
 -  **Instant Materialization** — Press `e` on any virtual or web tip to instantly convert it into a physical `.md` file so you can add your own permanent notes.
 -  **Native Fuzzy Finding** — Deep integration with both `Snacks.picker` and `Telescope` for searching your entire database (including virtual tips) with a custom Markdown previewer.
+-  **Seamless Integrations** — Integrations for `snacks.nvim` (Dashboard & Picker) and `lualine.nvim`.
 
 ## Requirements
 
@@ -68,16 +69,31 @@ https://github.com/user-attachments/assets/e64deff5-3690-4075-ac81-10cca634304c
       default_source     = "User",
     },
   },
-  keys = {
-    { "<leader>tr", function() require("totd").random() end,  desc = "[T]ip [R]andom" },
-    { "<leader>tc", function() require("totd").create() end,  desc = "[T]ip [C]reate" },
-    { "<leader>tl", function() require("totd").last() end,    desc = "[T]ip [L]ast" },
+    keys = {
+    { 
+      "<leader>tr", 
+      function() 
+        require("totd").pick_random() 
+        vim.notify("[totd] Tip rerolled!", vim.log.levels.INFO)
+      end,  
+      desc = "[T]ip [R]oll" 
+    },
+    { 
+      "<leader>te", 
+      function() 
+        local current = require("totd").get_current()
+        if current then require("totd").open(current.path) end
+      end,  
+      desc = "[T]ip [E]xamine Current" 
+    },
+    { 
+      "<leader>tc", 
+      function() require("totd").create() end,  
+      desc = "[T]ip [C]reate" 
+    },
     {
-      -- Example using Snacks.picker (See Advanced Features for Telescope)
       "<leader>ts",
-      function()
-        -- ... Snacks picker configuration ...
-      end,
+      function() require("totd").snacks_picker() end,
       desc = "[T]ip [S]earch",
     },
   },
@@ -112,7 +128,7 @@ This will instantly scaffold a Markdown file in your `db_path` and open it for e
 
 | Command | Description |
 |---------|-------------|
-| `:TotdRandom` | Weighted random tip (prioritizes unread tips)|
+| `:TotdRandom` | Random tip (Headless rolls should use `require("totd").pick_random()` in Lua)|
 | `:TotdRandom context=auto` | Random tip heavily weighted toward your current buffer's filetype |
 | `:TotdRandom complexity=beginner` | Filtered random tip|
 | `:TotdCreate [title]` | Scaffold a new tip|
@@ -121,7 +137,7 @@ This will instantly scaffold a Markdown file in your `db_path` and open it for e
 | `:TotdEdit <identifier>` | Edit the raw Markdown file|
 | `:TotdImport <path>` | Import an existing markdown file (supports globs)|
 | `:TotdDelete <filename>` | Delete a physical tip|
-| `:TotdLast` | Re-open the last viewed tip|
+| `:TotdLast` | Re-open the current/last viewed tip in memory|
 | `:TotdReset` | Reset all learning progress (view counts) to zero|
 | `:TotdClearCache` | Clear persistent disk and memory caches for external web sources |
 | `:TotdTeaser` | Print a compact dashboard teaser for a random tip|
@@ -193,71 +209,30 @@ print(teaser.synopsis) -- e.g., "The . command is the single most powerful featu
 
 
 ```lua
-{
-  align = "center",
-  padding = 2,
-  text = (function()
-    local ok, totd = pcall(require, "totd")
-    if not ok then return { { "Plugin loading...", hl = "Comment" } } end
+sections = {
+    { section = "header" },
+    -- Drop this for default view
+    require("totd").snacks_dashboard({ width = 50, action_key = " <leader>te" }),
+    { section = "keys", gap = 1, padding = 1 },
+```
+### Lualine
 
-    local tip = totd.pick_random()
-    local data = totd.get_teaser_data(tip)
-
-    local width = 50
-    local ui_text = {}
-
-    -- Matches native Snacks.dashboard colors
-    local hl_title = "Title" 
-    local hl_synopsis = "SnacksDashboardDesc" 
-    local hl_bar = "Comment" 
-    local hl_desc = "SnacksDashboardDesc" 
-    local hl_key = "SnacksDashboardKey" 
-
-    local function wrap(text, max_w)
-      local lines, current_line = {}, ""
-      for word in text:gmatch("%S+") do
-        if #current_line + #word + 1 > max_w then
-          table.insert(lines, current_line)
-          current_line = word
-        else
-          current_line = current_line == "" and word or current_line .. " " .. word
-        end
-      end
-      if current_line ~= "" then table.insert(lines, current_line) end
-      return lines
-    end
-
-    -- 1. TITLE
-    local title_str = "  💡 " .. data.title
-    local title_pad = math.max(0, width - vim.fn.strdisplaywidth(title_str))
-    table.insert(ui_text, { title_str .. string.rep(" ", title_pad) .. "\n\n", hl = hl_title })
-
-    -- 2. SYNOPSIS
-    local wrapped_synopsis = wrap(data.synopsis, width - 4)
-    for _, line in ipairs(wrapped_synopsis) do
-      local line_pad = math.max(0, (width - 4) - vim.fn.strdisplaywidth(line))
-      table.insert(ui_text, { "  ┃ ", hl = hl_bar })
-      table.insert(ui_text, { line .. string.rep(" ", line_pad) .. "\n", hl = hl_synopsis })
-    end
-
-    -- 3. ACTION (Aligns exactly with the text block)
-    local action_desc = "open "
-    local action_key = " <leader>tl"
-    local action_prefix = "    " 
-
-    local used_width = vim.fn.strdisplaywidth(action_prefix .. action_desc .. action_key)
-    local pad_len = math.max(0, width - used_width)
-    
-    table.insert(ui_text, { "\n" .. action_prefix, hl = "Normal" })
-    table.insert(ui_text, { action_desc, hl = hl_desc })
-    table.insert(ui_text, { string.rep(" ", pad_len), hl = hl_bar })
-    table.insert(ui_text, { action_key, hl = hl_key })
-
-    return ui_text
-  end)(),
+For a minimalist approach, inject the current tip directly into your status bar. It's clickable! Clicking the tip in the statusline will instantly open the floating window to read it.
+```lua
+-- In your lualine.lua opts:
+require('lualine').setup {
+  sections = {
+    lualine_c = {
+      {'filename'},
+      
+      -- Drop this one-liner next to your filename
+      require("totd").lualine_component({ icon = "", max_length = 40 })
+    },
+  }
 }
 ```
 ---
+
 
 ## Tip Schema
 
