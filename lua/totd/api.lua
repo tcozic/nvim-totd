@@ -268,30 +268,33 @@ local function process_queue()
 	if is_writing or #write_queue == 0 then return end
 	is_writing = true
 	
-	local state = table.remove(write_queue, 1)
+	-- We now pop a pre-encoded string, no Vimscript functions needed here!
+	local json_str = table.remove(write_queue, 1)
 	local filepath = get_state_file()
-	local json_str = vim.fn.json_encode(state)
 
-	uv.fs_open(filepath, "w", 438, function(err, fd)
+	vim.uv.fs_open(filepath, "w", 438, function(err, fd)
 		if err or not fd then
 			vim.schedule(function()
 				vim.notify("[totd] Failed to open state file: " .. (err or "unknown"), vim.log.levels.ERROR)
+				is_writing = false
+				process_queue()
 			end)
-			is_writing = false
-			process_queue()
 			return
 		end
 		
-		uv.fs_write(fd, json_str, -1, function(write_err)
+		vim.uv.fs_write(fd, json_str, -1, function(write_err)
 			if write_err then
 				vim.schedule(function()
 					vim.notify("[totd] Failed to write state file: " .. write_err, vim.log.levels.ERROR)
 				end)
 			end
 			
-			uv.fs_close(fd, function()
-				is_writing = false
-				process_queue()
+			vim.uv.fs_close(fd, function()
+				-- Jump back to the main thread before running the next item
+				vim.schedule(function()
+					is_writing = false
+					process_queue()
+				end)
 			end)
 		end)
 	end)
@@ -300,11 +303,17 @@ end
 --- Save the view counts to disk asynchronously
 --- @param state table<string, number|boolean>
 local function save_state(state)
-	-- Deepcopy prevents subsequent synchronous mutations from altering queued writes
-	table.insert(write_queue, vim.deepcopy(state))
+	-- 1. Encode JSON synchronously on the main thread (100% safe)
+	-- 2. This natively creates a snapshot, so we no longer need vim.deepcopy
+	local ok, json_str = pcall(vim.fn.json_encode, state)
+	if not ok then
+		vim.notify("[totd] Failed to encode state JSON", vim.log.levels.ERROR)
+		return
+	end
+	
+	table.insert(write_queue, json_str)
 	process_queue()
 end
-
 --- Increment the view count for a specific tip
 --- @param filename string
 local function track_view(filename)
