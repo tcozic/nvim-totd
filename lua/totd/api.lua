@@ -592,8 +592,8 @@ function M.open(identifier, display, no_track)
 
 		local lines = ui.format_tip(t.fm, t.body)
 		-- Help tips use the extractor to grab just the code block
-		local sandbox, lang = extract_virtual_sandbox(t.body)
-		ui.render(lines, sandbox, lang or "vim", t.fm, display, identifier)
+		-- local sandbox, lang = extract_virtual_sandbox(t.body)
+    ui.render(lines, t.body, "help", t.fm, display, identifier)
 		return
 	end
 
