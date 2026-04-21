@@ -10,7 +10,7 @@ function M.picker()
 
 	local totd = require("totd")
 	local progress = require("totd.progress") -- Load the progress module
-	local state = progress.load()             -- Load the current Anki state
+	local state = progress.load() -- Load the current Anki state
 
 	snacks.picker({
 		title = "Tip of the Day",
@@ -19,11 +19,11 @@ function M.picker()
 			local items = {}
 			for _, tip in ipairs(totd.list()) do
 				local is_virtual = tip.path:match("^virtual:")
-				
+
 				-- Define the filename so we can check the state
 				local filename = vim.fn.fnamemodify(tip.path, ":t")
 				local is_masked = state["suspend:" .. filename] == true
-				
+
 				table.insert(items, {
 					text = tip.title .. " " .. tip.mode .. " " .. tip.complexity,
 					file = not is_virtual and tip.path or nil,
@@ -49,19 +49,19 @@ function M.picker()
 				{ t.complexity, detail_hl },
 			}
 		end,
-    actions = {
+		actions = {
 			mask_tip = function(picker, item)
 				if not item then
 					return
 				end
 				-- 1. Toggle the backend state silently
 				require("totd").toggle_suspend(item.tip_data.path, true)
-				
+
 				-- 2. Flip the state of the item currently in memory
 				item.is_masked = not item.is_masked
-				
+
 				-- 3. Force the picker's list to redraw instantly to apply the new color
-				if picker.list and picker.list.update then
+				if picker.list and type(picker.list.update) == "function" then
 					picker.list:update({ force = true })
 				end
 			end,
@@ -90,7 +90,7 @@ function M.picker()
 		end,
 		confirm = function(picker, item)
 			picker:close()
-			if item then
+			if item and item.tip_data then
 				totd.open(item.tip_data.path)
 			end
 		end,

@@ -8,7 +8,7 @@ local ui = require("totd.ui")
 local progress = require("totd.progress")
 local current_tip_path = nil
 local current_tip_data = nil -- NEW: Cache the full tip object
-local uv = uv or vim.loop
+local uv = vim.uv or vim.loop
 math.randomseed(uv.hrtime())
 
 local cached_tutor_tips = {}
@@ -247,9 +247,10 @@ function M.toggle_suspend(identifier, no_open)
 	end
 
 	if not no_open then
-		M.open(identifier, nil, true) 
+		M.open(identifier, nil, true)
 	end
 end
+
 -- ─────────────────────────────────────────────────────────────────────────────
 -- Internal helpers
 -- ─────────────────────────────────────────────────────────────────────────────
@@ -503,7 +504,9 @@ function M.pick_random(opts)
 	opts = opts or {}
 	local tips = M.list(opts)
 
-	if #tips == 0 then return nil end
+	if #tips == 0 then
+		return nil
+	end
 
 	local state = progress.load()
 	local total_weight = 0
@@ -516,14 +519,16 @@ function M.pick_random(opts)
 
 	for _, tip in ipairs(tips) do
 		local weight = progress.calculate_weight(tip, context_ft, state)
-		
+
 		if weight > 0 then
 			total_weight = total_weight + weight
 			table.insert(weighted_tips, { tip = tip, weight = weight })
 		end
 	end
 
-	if #weighted_tips == 0 then return nil end
+	if #weighted_tips == 0 then
+		return nil
+	end
 
 	local target = math.random(1, math.max(1, math.floor(total_weight)))
 	local selected_tip = weighted_tips[1].tip
@@ -536,10 +541,11 @@ function M.pick_random(opts)
 	end
 
 	current_tip_path = selected_tip.path
-	current_tip_data = selected_tip 
+	current_tip_data = selected_tip
 	vim.api.nvim_exec_autocmds("User", { pattern = "TotdUpdate", modeline = false })
 	return selected_tip
 end
+
 --- Open and display a random tip.
 --- @param opts table|nil { complexity=string, mode=string, tags=table, display=string }
 function M.random(opts)
@@ -566,7 +572,7 @@ end
 --- @param body string
 --- @return string|nil sandbox, string|nil lang
 local function extract_virtual_sandbox(body)
-  local lang, code = body:match("```(%w*)\n([^\0]-)\n```%s*$")
+	local lang, code = body:match("```(%w*)\n(.-)\n```%s*$")
 	if code then
 		return vim.trim(code), lang ~= "" and lang or nil
 	end
@@ -586,14 +592,16 @@ function M.open(identifier, display, no_track)
 			return
 		end
 
-		if not no_track then progress.track_view(identifier) end
+		if not no_track then
+			progress.track_view(identifier)
+		end
 		current_tip_path = identifier
 		t.fm.is_suspended = progress.is_suspended(identifier)
 
 		local lines = ui.format_tip(t.fm, t.body)
 		-- Help tips use the extractor to grab just the code block
 		-- local sandbox, lang = extract_virtual_sandbox(t.body)
-    ui.render(lines, t.body, "help", t.fm, display, identifier)
+		ui.render(lines, t.body, "help", t.fm, display, identifier)
 		return
 	end
 
@@ -604,7 +612,9 @@ function M.open(identifier, display, no_track)
 			return
 		end
 
-		if not no_track then progress.track_view(identifier) end
+		if not no_track then
+			progress.track_view(identifier)
+		end
 		current_tip_path = identifier
 		t.fm.is_suspended = progress.is_suspended(identifier)
 
@@ -620,7 +630,9 @@ function M.open(identifier, display, no_track)
 			return
 		end
 
-		if not no_track then progress.track_view(identifier) end
+		if not no_track then
+			progress.track_view(identifier)
+		end
 		current_tip_path = identifier
 		t.fm.is_suspended = progress.is_suspended(identifier)
 
@@ -639,8 +651,10 @@ function M.open(identifier, display, no_track)
 		return
 	end
 	local path = identifier:sub(1, 1) == "/" and identifier or (config.options.db_path .. "/" .. identifier)
-	
-	if not no_track then progress.track_view(vim.fn.fnamemodify(path, ":t")) end
+
+	if not no_track then
+		progress.track_view(vim.fn.fnamemodify(path, ":t"))
+	end
 
 	local content, err = parser.read_file(path)
 	if not content then
@@ -660,6 +674,7 @@ function M.open(identifier, display, no_track)
 	-- Add identifier here!
 	ui.render(lines, sandbox, lang, fm, display, identifier)
 end
+
 --- Scaffold a new tip file and drop the user into an editing session.
 ---
 --- @param opts table|nil { title=string }
@@ -870,7 +885,7 @@ end
 function M.reset_progress()
 	local choice = vim.fn.confirm("Reset all learning progress?", "&Yes\n&No", 2)
 	if choice == 1 then
-    progress.reset()
+		progress.reset()
 		vim.notify("[totd] View counts reset to zero. All tips have weight 100.", vim.log.levels.INFO)
 	else
 		vim.notify("[totd] Reset cancelled.", vim.log.levels.INFO)
@@ -1025,19 +1040,23 @@ function M.clear_cache()
 		vim.notify("[totd] Cache is already empty.", vim.log.levels.INFO)
 	end
 end
+
 --- Retrieves the currently active tip without rolling a new one.
 --- If no tip has been rolled yet this session, it rolls one.
 --- @return table|nil tip_data
 function M.get_current()
 	if not current_tip_data then
+		-- Only rolls if the session is brand new
 		return M.pick_random()
 	end
 	return current_tip_data
 end
+
 --- Process a validation score for the current tip.
 --- @param identifier string Filename or absolute path
 --- @param score_val number 1 (Hard) or 2 (Good)
 function M.score(identifier, score_val)
 	progress.score(identifier, score_val)
 end
+
 return M

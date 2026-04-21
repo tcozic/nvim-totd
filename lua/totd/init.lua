@@ -25,8 +25,8 @@ end
 --- @param opts table|nil User configuration (merged with defaults)
 function M.setup(opts)
 	config.setup(opts or {})
-  -- Automatically listen for internal updates to refresh the Snacks dashboard
-  -- Automatically listen for internal updates to refresh UI components
+	-- Automatically listen for internal updates to refresh the Snacks dashboard
+	-- Automatically listen for internal updates to refresh UI components
 	vim.api.nvim_create_autocmd("User", {
 		pattern = "TotdUpdate",
 		callback = function()
@@ -38,7 +38,7 @@ function M.setup(opts)
 						require("snacks").dashboard.update()
 					end
 				end
-				
+
 				-- 2. NEW: Refresh Lualine (if active)
 				if package.loaded["lualine"] then
 					require("lualine").refresh()
@@ -77,12 +77,12 @@ function M.setup(opts)
 				end
 				return result
 			end
-      return { "complexity=", "mode=", "tags=", "display=", "context=" }
+			return { "complexity=", "mode=", "tags=", "display=", "context=" }
 		end,
 		desc = "Show a random Tip of the Day",
 	})
-	
-    -- :TotdCreate [title]
+
+	-- :TotdCreate [title]
 	vim.api.nvim_create_user_command("TotdCreate", function(cmd_opts)
 		local title = cmd_opts.args ~= "" and cmd_opts.args or nil
 		api.create({ title = title })
@@ -92,7 +92,7 @@ function M.setup(opts)
 	})
 
 	-- :TotdOpen <filename>
-    vim.api.nvim_create_user_command("TotdOpen", function(cmd_opts)
+	vim.api.nvim_create_user_command("TotdOpen", function(cmd_opts)
 		if cmd_opts.args == "" then
 			vim.notify("[totd] Usage: TotdOpen <filename/identifier>", vim.log.levels.WARN)
 			return
@@ -103,8 +103,8 @@ function M.setup(opts)
 		complete = complete_identifiers,
 		desc = "Open a specific Tip of the Day by filename or identifier",
 	})
-	
-    -- :TotdList  (prints a quick summary to the messages area)
+
+	-- :TotdList  (prints a quick summary to the messages area)
 	vim.api.nvim_create_user_command("TotdList", function()
 		local tips = api.list()
 		if #tips == 0 then
@@ -119,8 +119,8 @@ function M.setup(opts)
 	end, {
 		desc = "List all available tips",
 	})
-	
-    -- :TotdEdit <filename>
+
+	-- :TotdEdit <filename>
 	vim.api.nvim_create_user_command("TotdEdit", function(cmd_opts)
 		if cmd_opts.args == "" then
 			vim.notify("[totd] Usage: TotdEdit <filename>", vim.log.levels.WARN)
@@ -141,8 +141,8 @@ function M.setup(opts)
 		end,
 		desc = "Edit the raw Markdown of a Tip of the Day",
 	})
-	
-    -- :TotdImport <filepath> or <glob>
+
+	-- :TotdImport <filepath> or <glob>
 	vim.api.nvim_create_user_command("TotdImport", function(cmd_opts)
 		if #cmd_opts.fargs == 0 then
 			vim.notify("[totd] Usage: TotdImport <filepath/glob>...", vim.log.levels.WARN)
@@ -167,12 +167,12 @@ function M.setup(opts)
 			vim.notify(string.format("[totd] Successfully processed %d file(s).", imported_count), vim.log.levels.INFO)
 		end
 	end, {
-		nargs = "+", 
-		complete = "file", 
+		nargs = "+",
+		complete = "file",
 		desc = "Import existing markdown file(s) into the Totd database",
 	})
-	
-    -- :TotdDelete <filename>
+
+	-- :TotdDelete <filename>
 	vim.api.nvim_create_user_command("TotdDelete", function(cmd_opts)
 		if cmd_opts.args == "" then
 			vim.notify("[totd] Usage: TotdDelete <filename>", vim.log.levels.WARN)
@@ -192,35 +192,34 @@ function M.setup(opts)
 		end,
 		desc = "Delete a Tip of the Day",
 	})
-	
-    -- :TotdLast
+
+	-- :TotdLast
 	vim.api.nvim_create_user_command("TotdLast", function(cmd_opts)
 		api.last()
 	end, { desc = "Show the most recently generated Tip of the Day" })
-  
-    -- :TotdReset
+
+	-- :TotdReset
 	vim.api.nvim_create_user_command("TotdReset", function()
 		api.reset_progress()
 	end, {
 		desc = "Reset all learning progress (Anki view counts) to zero",
 	})
-  
-    -- :TotdTeaser (For debugging the compact view)
+
+	-- lua/totd/init.lua
+	-- BUG 9: TotdTeaser now uses get_current() to avoid destructive re-rolls
 	vim.api.nvim_create_user_command("TotdTeaser", function()
-		local tip = api.pick_random()
+		local tip = api.get_current()
 		local teaser = api.get_teaser_data(tip)
 		vim.notify(string.format("%s\n%s", teaser.title, teaser.synopsis), vim.log.levels.INFO)
-	end, {
-		desc = "Preview the compact dashboard teaser for a random tip",
-	})
-	
-  -- :TotdClearCache
+	end, { desc = "Preview current tip teaser" })
+
+	-- :TotdClearCache
 	vim.api.nvim_create_user_command("TotdClearCache", function()
 		api.clear_cache()
 	end, {
 		desc = "Clear disk and memory caches for external web sources",
 	})
-    -- ── Auto-show on startup ───────────────────────────────────────────────────
+	-- ── Auto-show on startup ───────────────────────────────────────────────────
 	if config.options.show_on_startup then
 		vim.api.nvim_create_autocmd("VimEnter", {
 			once = true,

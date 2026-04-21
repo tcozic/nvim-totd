@@ -13,22 +13,28 @@ function M.component(opts)
 		-- The main function that returns the text
 		function()
 			local ok, totd = pcall(require, "totd")
-			if not ok then return "" end
-
-			local tip = totd.get_current()
-			if not tip then return "" end
-
-			local title = tip.title
-			if #title > max_length then
-				title = title:sub(1, max_length - 3) .. "..."
+			if not ok then
+				return ""
 			end
 
+			local tip = totd.get_current()
+			if not tip then
+				return ""
+			end
+
+			local title = tip.title
+			local char_count = vim.fn.strchars(title)
+			if char_count > max_length then
+				title = vim.fn.strcharpart(title, 0, max_length - 3) .. "..."
+			end
 			return icon .. " " .. title
 		end,
-		
+
 		-- Optional: Hide the tip if the Neovim window gets too narrow
 		cond = function()
-			if not hide_in_narrow then return true end
+			if not hide_in_narrow then
+				return true
+			end
 			return vim.o.columns > 100
 		end,
 

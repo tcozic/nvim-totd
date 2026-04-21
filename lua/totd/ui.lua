@@ -55,10 +55,7 @@ end
 --- @param path string|nil The identifier/path of the tip for editing and masking
 function M.float(lines, sandbox, lang, fm, path)
 	-- 1. Calculate window size
-	local width = math.floor(vim.o.columns * 0.8)
-	local height = math.floor(vim.o.lines * 0.8)
-	local col = math.floor((vim.o.columns - width) / 2)
-	local row = math.floor((vim.o.lines - height) / 2)
+	local width, height, row, col = float_dimensions()
 
 	-- ─────────────────────────────────────────────────────────────
 	-- INJECT VISUAL KEYMAP HINTS (FOOTER)
@@ -66,8 +63,8 @@ function M.float(lines, sandbox, lang, fm, path)
 	table.insert(lines, "")
 	table.insert(lines, string.rep("─", 72))
 
-  local hints = { "[q] close", "[1] hard", "[2] good", "[e] edit" }
-	
+	local hints = { "[q] close", "[1] hard", "[2] good", "[e] edit" }
+
 	if fm and fm.is_suspended then
 		table.insert(hints, "[m] unmask")
 	else
@@ -76,7 +73,7 @@ function M.float(lines, sandbox, lang, fm, path)
 	-- Ensure sandbox actually has content (not just an empty string)
 	if sandbox and sandbox ~= "" then
 		table.insert(hints, "[<leader>sb] sandbox")
-    table.insert(hints, "[<leader>y] yank") -- Updated hint
+		table.insert(hints, "[<leader>y] yank") -- Updated hint
 	end
 	if fm and type(fm.related) == "table" and #fm.related > 0 then
 		table.insert(hints, "[R] related")
@@ -107,23 +104,27 @@ function M.float(lines, sandbox, lang, fm, path)
 	-- 4. Standard Keymaps
 	vim.keymap.set("n", "q", "<cmd>close<CR>", { buffer = buf, desc = "Close Tip" })
 
-  -- ─────────────────────────────────────────────────────────────
+	-- ─────────────────────────────────────────────────────────────
 	-- NEW: Edit Tip Keymap & Scoring Behaviors
 	-- ─────────────────────────────────────────────────────────────
 	if path then
 		local function handle_behavior()
 			-- Read the config dynamically so it always respects the user's choice
 			local behavior = require("totd.config").options.ui.scoring_behavior or "close"
-			
+
 			if behavior == "keep_open" then
 				return -- Do nothing, leave the window open
 			elseif behavior == "reroll" then
 				vim.cmd("close")
 				-- 150ms delay ensures the async DB save finishes before weighting the next random tip
-				vim.defer_fn(function() require("totd.api").pick_random() end, 150)
+				vim.defer_fn(function()
+					require("totd.api").pick_random()
+				end, 150)
 			elseif behavior == "open_next" then
 				vim.cmd("close")
-				vim.defer_fn(function() require("totd.api").random() end, 150)
+				vim.defer_fn(function()
+					require("totd.api").random()
+				end, 150)
 			else -- "close" (fallback)
 				vim.cmd("close")
 			end
@@ -140,9 +141,14 @@ function M.float(lines, sandbox, lang, fm, path)
 		end, { buffer = buf, desc = "Score: Good" })
 
 		vim.keymap.set("n", "m", function()
-			-- Pass `true` as the second argument so the API doesn't force a redraw
 			require("totd.api").toggle_suspend(path, true)
-			handle_behavior()
+			local behavior = require("totd.config").options.ui.scoring_behavior or "close"
+			if behavior == "keep_open" then
+				-- FIX: Re-render to update the [MASKED] badge
+				require("totd.api").open(path, "float", true)
+			else
+				handle_behavior()
+			end
 		end, { buffer = buf, desc = "Toggle Mask/Suspend" })
 
 		vim.keymap.set("n", "e", function()
@@ -167,21 +173,28 @@ function M.float(lines, sandbox, lang, fm, path)
 			vim.cmd("vsplit")
 			local s_buf = vim.api.nvim_create_buf(false, true)
 			vim.api.nvim_buf_set_lines(s_buf, 0, -1, false, vim.split(sandbox, "\n"))
-
-			vim.bo[s_buf].filetype = lang or "text"
+			vim.bo[s_buf].filetype = (lang and lang ~= "") and lang or "markdown"
 			vim.api.nvim_win_set_buf(0, s_buf)
 
-			vim.api.nvim_create_autocmd("WinClosed", {
-				buffer = s_buf,
-				once = true,
-				callback = function()
+			local function close_sandbox_tab()
+				vim.schedule(function()
 					if vim.api.nvim_tabpage_is_valid(tab_page) then
 						vim.cmd("tabclose")
 					end
-				end,
+				end)
+			end
+			vim.api.nvim_create_autocmd("WinClosed", {
+				buffer = tip_buf,
+				once = true,
+				callback = close_sandbox_tab,
+			})
+			vim.api.nvim_create_autocmd("WinClosed", {
+				buffer = s_buf,
+				once = true,
+				callback = close_sandbox_tab,
 			})
 		end, { buffer = buf, desc = "Open Practice Sandbox" })
-    vim.keymap.set("n", "<leader>y", function()
+		vim.keymap.set("n", "<leader>y", function()
 			vim.fn.setreg('"', sandbox)
 			vim.notify("[totd] Sandbox yanked to unnamed register", vim.log.levels.INFO)
 		end, { buffer = buf, desc = "Yank Sandbox" })

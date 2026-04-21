@@ -17,10 +17,9 @@ function M.parse(content)
 
 	local frontmatter = M._parse_yaml(yaml_block)
 
-  -- Extract the sandbox for "Practice Mode"
+	-- Extract the sandbox for "Practice Mode"
 	local sandbox = nil
-	-- FIX: Replace (.-) with ([^\0]-) to guarantee newline capturing
-  local lang, code = body:match("```(%w*)\n(.-)\n```%s*$")
+	local lang, code = body:match("```(%w*)\n(.-)\n```%s*$")
 	if code then
 		sandbox = vim.trim(code)
 	else
